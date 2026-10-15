@@ -25,7 +25,20 @@ import torch.nn as nn
 class MLP(nn.Module):
     def __init__(self, in_dim: int, hidden: list[int], dropout: float = 0.3, prior: float = 0.5):
         super().__init__()
-        raise NotImplementedError("TASK 2: build the layers")
+        layers: list[nn.Module] = []
+        width = in_dim
+        for h in hidden:
+            layers += [nn.Linear(width, h), nn.ReLU(), nn.Dropout(dropout)]
+            width = h
+        self.body = nn.Sequential(*layers)
+        self.head = nn.Linear(width, 1)
+
+        # Start at the training mean: sigmoid(bias) == prior, and a small head
+        # keeps the initial output near it instead of at a random 0.5 +- noise.
+        p = min(max(float(prior), 1e-4), 1 - 1e-4)
+        with torch.no_grad():
+            self.head.weight.mul_(0.1)
+            self.head.bias.fill_(float(torch.logit(torch.tensor(p))))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError("TASK 2: one number in [0, 1] per row, shape (batch,)")
+        return torch.sigmoid(self.head(self.body(x))).squeeze(-1)
